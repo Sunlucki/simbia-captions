@@ -1,0 +1,7 @@
+.build/
+.swiftpm/
+_to_delete/
+.DS_Store
+*.xcodeproj/
+# brand material of the machine it is built on (the product photo for T2): never in the repository
+Assets/Brand/
