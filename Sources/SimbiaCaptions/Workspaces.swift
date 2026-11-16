@@ -81,12 +81,10 @@ struct WorkspaceMenu: View {
     var body: some View {
         Menu {
             ForEach(job.recentWorkspaces, id: \.self) { url in
-                Button {
-                    if let w = try? Workspace.load(url) { job.useWorkspace(w) }
-                } label: {
-                    let name = (try? Workspace.load(url))?.settings.name ?? url.lastPathComponent
-                    if url.standardizedFileURL == job.workspace?.root { Label(name, systemImage: "checkmark") } else { Text(name) }
-                }
+                // a Toggle is what a macOS menu draws with ✓ (a Label's image is not shown in the menu)
+                Toggle((try? Workspace.load(url))?.settings.name ?? url.lastPathComponent, isOn: Binding(
+                    get: { url.standardizedFileURL == job.workspace?.root },
+                    set: { _ in if let w = try? Workspace.load(url) { job.useWorkspace(w) } }))
             }
             if !job.recentWorkspaces.isEmpty { Divider() }
             Button(job.t("Новое пространство…", "New Workspace…", "Nouvel espace…")) { job.newWorkspaceOpen = true }
