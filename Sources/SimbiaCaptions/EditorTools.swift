@@ -288,7 +288,8 @@ extension Job {
         guard footageState == .idle || footageState == .missing else { return }
         let picked = UserDefaults.standard.string(forKey: "footageIndex").map { URL(fileURLWithPath: $0, isDirectory: true) }
             .flatMap { FileManager.default.fileExists(atPath: $0.appending(path: "clips").path) ? $0 : nil }
-        guard let folder = picked ?? FootageIndex.find(near: projectURL) else { footageState = .missing; return }
+        let ownIndex = workspace.map(\.footageIndex).flatMap { FileManager.default.fileExists(atPath: $0.appending(path: "clips").path) ? $0 : nil }
+        guard let folder = ownIndex ?? picked ?? FootageIndex.find(near: projectURL) else { footageState = .missing; return }
         footageState = .loading
         Task { [weak self] in
             let loaded = await Task.detached(priority: .userInitiated) { Result { try FootageIndex.load(folder) } }.value

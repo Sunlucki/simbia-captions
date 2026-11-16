@@ -15,7 +15,11 @@ import UniformTypeIdentifiers
     var body: some Scene {
         // A single window: with a WindowGroup, every double-click on a project while the app was open
         // added one more window showing the same editor.
-        Window("Simbia Captions", id: "editor") { EditorView(job: job).frame(minWidth: 1180, minHeight: 780) }
+        Window("Simbia Captions", id: "editor") {
+            EditorView(job: job).frame(minWidth: 1180, minHeight: 780)
+                .sheet(isPresented: $job.newWorkspaceOpen) { NewWorkspaceSheet(job: job, open: $job.newWorkspaceOpen) }
+                .onAppear { job.restoreWorkspace() }
+        }
             .windowStyle(.hiddenTitleBar)
             .defaultSize(width: 1560, height: 980)
             .commands {
@@ -43,6 +47,8 @@ import UniformTypeIdentifiers
                     Button(job.t("Открыть проект…", "Open Project…", "Ouvrir un projet…")) { job.projectPicker() }
                         .keyboardShortcut("o", modifiers: [.command, .shift])
                         .disabled(job.busy)
+                    Button(job.t("Новое пространство…", "New Workspace…", "Nouvel espace…")) { job.newWorkspaceOpen = true }
+                    Button(job.t("Открыть пространство…", "Open Workspace…", "Ouvrir un espace…")) { job.workspacePicker() }
                     // sections bring their own separators
                     let folder = job.projectsInFolder
                     if !folder.isEmpty {
@@ -355,6 +361,9 @@ struct Look: Equatable, Codable {
     // Project (.simbia) — shots, sound, titles; the captions live in `cues`
     @Published var project: Project?
     @Published var projectURL: URL?
+    /// The workspace in use (Workspaces.swift); nil = projects anywhere, as before workspaces.
+    @Published var workspace: Workspace?
+    @Published var newWorkspaceOpen = false
     /// What the inspector edits: the selected caption, a title or a shot.
     @Published var focus: Focus = .caption
     /// The emoji picked on the focused title: handles on the picture, its size and turn in the title window.
@@ -1034,7 +1043,7 @@ struct Look: Equatable, Codable {
     func openVideo(_ url: URL) {
         guard !busy else { show(s.waitForCurrent, isError: true); return }
         // the same video again: carry on with the saved work instead of transcribing it afresh
-        let saved = Self.autosaveURL(for: url)
+        let saved = Self.autosaveURL(for: url, in: workspace)
         if FileManager.default.fileExists(atPath: saved.path) {
             appendLog("Selected video: \(url.path) — continuing \(saved.lastPathComponent)")
             openProject(saved)

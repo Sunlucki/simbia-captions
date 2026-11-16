@@ -264,6 +264,7 @@ extension Job {
             player.pause()
             video = nil
             projectURL = url
+            if let w = Workspace.find(near: url) { useWorkspace(w) }
             sync.builtFrom = nil
             adopt(loaded, data: data, url: url)
             sync.journalBase = document()
@@ -478,7 +479,7 @@ extension Job {
         guard projectURL == nil, video != nil else { return }
         ensureProject()
         guard let video else { return }
-        let url = Self.autosaveURL(for: video)
+        let url = Self.autosaveURL(for: video, in: workspace)
         projectURL = url
         sync.lastState = nil; sync.lastData = nil; sync.lastModified = nil
         if saveIfChanged() {
@@ -487,9 +488,13 @@ extension Job {
         }
     }
 
-    /// Where a video's own project is kept: its name, plus a short checksum of its path so two videos
-    /// with the same name do not share one.
-    static func autosaveURL(for video: URL) -> URL {
+    /// Where a video's own project is kept: in a workspace, its projects folder under the video's name; outside one,
+    /// Application Support, its name plus a short checksum of its path so two videos with the same name do not share one.
+    static func autosaveURL(for video: URL, in workspace: Workspace? = nil) -> URL {
+        if let workspace {
+            try? FileManager.default.createDirectory(at: workspace.projects, withIntermediateDirectories: true)
+            return workspace.projects.appending(path: video.deletingPathExtension().lastPathComponent + "." + Project.fileExtension)
+        }
         let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appending(path: "Simbia Captions/Projects", directoryHint: .isDirectory)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
