@@ -51,7 +51,7 @@ enum MCPServer {
         ["type": "object", "properties": properties, "required": required]
     }
     static let workspaceArg: [String: Any] = ["type": "string", "description": "a folder in the workspace; default: where the server runs"]
-    static let projectArg: [String: Any] = ["type": "string", "description": "a .simbia path, a file name in the projects folder, or its start (\"VD 660\")"]
+    static let projectArg: [String: Any] = ["type": "string", "description": "a .simbia path, a file name in the projects folder, or its start (\"VD 12\")"]
 
     static let tools: [[String: Any]] = [
         ["name": "workspace_info", "description": "The workspace: name, brand, dictionary, author and every folder (absolute, and whether it exists).",

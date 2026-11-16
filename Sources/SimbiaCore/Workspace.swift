@@ -253,7 +253,7 @@ extension Workspace {
     }
 
     /// A project named the way a person would: a path, a file name in the projects folder (".simbia" optional),
-    /// or the start of one ("VD 660").
+    /// or the start of one ("VD 12").
     public func project(named name: String) -> URL? {
         let fm = FileManager.default
         let expanded = (name as NSString).expandingTildeInPath
