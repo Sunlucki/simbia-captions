@@ -22,6 +22,9 @@ import UniformTypeIdentifiers
 //   simbia covers <project.simbia> <shot #> [--apply]   burned-in text found on a shot by Vision; --apply covers it and saves
 //   simbia words <media> [from to] [--locale en-US] [--hint word]... [--json out]
 //                                                       what the Mac hears, word by word: {path, words: [{w, t0, t1}]}
+//   simbia workspace init <folder> […] | info [path]   a new workspace (folders, settings, CLAUDE.md, .mcp.json) / its settings
+//   simbia projects [workspace]                         the workspace's projects, one line each
+//   simbia mcp                                          the MCP server for Claude, on stdin/stdout
 
 let usage = """
 usage:
@@ -36,6 +39,10 @@ usage:
   simbia tempo <audio | project.simbia>
   simbia covers <project.simbia> <shot #> [--apply]
   simbia words <media> [from to] [--locale en-US] [--hint word]... [--json out]
+  simbia workspace init <folder> [--name N] [--brand B] [--key k] [--author A]
+  simbia workspace info [path]
+  simbia projects [workspace]
+  simbia mcp
 """
 
 func fail(_ message: String) -> Never {
@@ -45,6 +52,7 @@ func fail(_ message: String) -> Never {
 
 func load(_ path: String) -> (Project, URL) {
     let url = URL(fileURLWithPath: path)
+    Workspace.activate(near: url)
     do { return (try Project.load(from: url), url) } catch { fail(error.localizedDescription) }
 }
 
@@ -423,6 +431,37 @@ case "suggest":                                    // the library's best moments
     for s in index.suggest(for: said, length: shot.duration, taken: taken) {
         print(String(format: "  %@ @%.1f–%.1f  %@ · %@%@\n    %@", s.clip, s.from, s.to, s.tag, s.who, s.usedIn.isEmpty ? "" : " · used in \(s.usedIn.joined(separator: ", "))", s.note))
     }
+
+case "workspace":                                 // workspace init <folder> [--name …] [--brand …] [--key …] [--author …] | workspace info [path]
+    func option(_ name: String) -> String? { args.firstIndex(of: name).flatMap { args.indices.contains($0 + 1) ? args[$0 + 1] : nil } }
+    switch args.dropFirst().first {
+    case "init":
+        guard args.count >= 3 else { fail("simbia workspace init <folder> [--name N] [--brand B] [--key k] [--author A]") }
+        let root = URL(fileURLWithPath: (args[2] as NSString).expandingTildeInPath, isDirectory: true)
+        let brandName = option("--brand") ?? ""
+        let brand = Brand(name: brandName, key: option("--key") ?? (brandName.isEmpty ? "product" : brandName.lowercased().filter(\.isLetter)))
+        do {
+            let w = try Workspace.create(at: root, name: option("--name") ?? root.lastPathComponent, brand: brand,
+                                         author: option("--author"), simbia: Bundle.main.executableURL?.resolvingSymlinksInPath())
+            print("workspace «\(w.settings.name)» in \(w.root.path): \(Workspace.fileName), CLAUDE.md, .mcp.json, Projects/, Library/, Exports/")
+        } catch { fail(error.localizedDescription) }
+    case "info", nil:
+        let at = args.count >= 3 ? URL(fileURLWithPath: (args[2] as NSString).expandingTildeInPath) : URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        guard let w = Workspace.find(near: at) else { fail("no \(Workspace.fileName) in \(at.path) or above") }
+        print(MCPServer.json(MCPServer.info(w)))
+    default:
+        fail("simbia workspace init <folder> … | simbia workspace info [path]")
+    }
+
+case "projects":                                  // the workspace's projects: status, revision, who saved, length, open tasks
+    let at = args.count >= 2 ? URL(fileURLWithPath: (args[1] as NSString).expandingTildeInPath) : URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    guard let w = Workspace.find(near: at) else { fail("no \(Workspace.fileName) in \(at.path) or above") }
+    for p in w.summaries() {
+        print("\(p.file)\t\(p.status)\trev \(p.revision) \(p.savedBy)\t\(String(format: "%.1f", p.duration)) s\t\(p.shots) shots\t\(p.openTasks.count) open")
+    }
+
+case "mcp":                                       // the MCP server on stdin/stdout, for Claude (see MCP.swift)
+    await MCPServer.run()
 
 default:
     fail(usage)

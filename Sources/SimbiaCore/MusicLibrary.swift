@@ -27,8 +27,10 @@ public enum MusicLibrary {
 
     static let types: Set<String> = ["wav", "mp3", "m4a", "aif", "aiff", "caf", "flac", "aac"]
 
-    /// `_ASSETS/MUSIC` in a folder above the project (where `_ASSETS/_index` is found for the footage library).
+    /// The workspace's music folder, else `_ASSETS/MUSIC` in a folder above the project.
     public static func find(near projectURL: URL?) -> URL? {
+        if let w = Workspace.find(near: projectURL) ?? Workspace.active,
+           FileManager.default.fileExists(atPath: w.music.path) { return w.music.resolvingSymlinksInPath() }
         var folder = projectURL?.deletingLastPathComponent()
         while let dir = folder, dir.path != "/" {
             let here = dir.appending(path: "_ASSETS/MUSIC", directoryHint: .isDirectory)

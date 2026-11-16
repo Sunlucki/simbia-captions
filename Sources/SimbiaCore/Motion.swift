@@ -77,14 +77,15 @@ public enum MotionLibrary {
         clip.duration ?? sceneDuration(clip, projectURL: projectURL)
     }
 
-    /// The kit's `frames` folder: where the project's overlays come from, or `*/RENDER_KIT/motion/frames` in a folder
-    /// above the project.
+    /// The kit's `frames` folder: where the project's overlays come from, the workspace's motion folder, or
+    /// `*/RENDER_KIT/motion/frames` in a folder above the project.
     public static func find(near projectURL: URL?, project: Project?) -> URL? {
         let fm = FileManager.default
         for clip in project?.overlays ?? [] {
             let parent = Project.resolve(clip.src, relativeTo: projectURL).deletingLastPathComponent()
             if fm.fileExists(atPath: parent.path) { return parent }
         }
+        if let w = Workspace.find(near: projectURL) ?? Workspace.active, fm.fileExists(atPath: w.motion.path) { return w.motion }
         var folder = projectURL?.deletingLastPathComponent()
         while let dir = folder, dir.path != "/" {
             let here = dir.appending(path: "RENDER_KIT/motion/frames")

@@ -30,8 +30,10 @@ public struct ReviewLibrary: Sendable {
 
     public static let file = "reviews.json"
 
-    /// `_ASSETS/TRUSTPILOT` in the project's folder or any folder above it — where the footage library sits.
+    /// The workspace's reviews folder, else `_ASSETS/TRUSTPILOT` in the project's folder or any folder above it.
     public static func find(near projectURL: URL?) -> URL? {
+        if let w = Workspace.find(near: projectURL) ?? Workspace.active,
+           FileManager.default.fileExists(atPath: w.reviews.appending(path: file).path) { return w.reviews }
         var folder = projectURL?.deletingLastPathComponent()
         while let dir = folder, dir.path != "/" {
             for candidate in [dir.appending(path: "_ASSETS/TRUSTPILOT"), dir.appending(path: "TRUSTPILOT")]
