@@ -40,9 +40,14 @@ enum MCPServer {
 
     static let instructions = """
     Simbia Captions edits vertical video ads; a workspace is a folder with simbia-workspace.json, its projects \
-    (.simbia JSON files) and its libraries. Start with workspace_info and list_projects. Read a project before you \
-    change it and save it with save_project (it bumps the revision, marks it as yours and writes the journal). \
-    check_project must say OK before anything is handed over; frames shows you the picture.
+    (.simbia JSON files) and its libraries. Start with workspace_info and list_projects, and read the workspace's \
+    CLAUDE.md: it holds the house rules and what to report after each task. The person may have the app open on \
+    the same file: it reloads your saves live, and a save is refused when the file changed since you read it. \
+    Order of work: read_project, change, save_project with `changes` in plain words (revision, author and journal \
+    are handled). Captions come from the voice with captions_from_voice: pass the exact script as `script` so the \
+    words are the script's and only the timing comes from the voice; it lists script words the voice doesn't say. \
+    Then fix_project and check_project until it ends with OK, look with frames, and only then export_project. \
+    Never rebuild a project the person has edited in the app (journal entries by app): change only what the task names.
     """
 
     // MARK: Tools
@@ -84,6 +89,12 @@ enum MCPServer {
          "inputSchema": schema(["project": projectArg, "shot": ["type": "integer", "description": "the shot's place in time order, from 0"], "workspace": workspaceArg], required: ["project", "shot"])],
         ["name": "words", "description": "What the Mac hears in a video or sound file, word by word with times.",
          "inputSchema": schema(["media": ["type": "string"], "from": ["type": "number"], "to": ["type": "number"]], required: ["media"])],
+        ["name": "captions_from_voice", "description": "Makes the captions from the project's voice clips (all, or those in `clips`) the way the app's «Create captions» does: the Mac's recogniser times every word and anchors it to its voice, one paragraph per clip, grouped for the caption style. With `script` the captions are exactly those words (e.g. the brief's script), timed by what is heard, and the script words the voice was not heard saying are listed. Replaces the captions over those clips (all captions when `clips` is left out) and saves: revision, journal.",
+         "inputSchema": schema(["project": projectArg, "clips": ["type": "array", "items": ["type": "string"], "description": "voice clip ids, e.g. [\"a1\"]; default: every voice clip"],
+                                "style": ["type": "string", "description": "caption style s1…s14 for the whole video; default: the project's"],
+                                "script": ["type": "string", "description": "the exact words the captions must say, in order"],
+                                "locale": ["type": "string", "description": "the voice's language, default en-US"],
+                                "workspace": workspaceArg], required: ["project"])],
     ]
 
     typealias Content = [[String: Any]]
@@ -213,6 +224,21 @@ enum MCPServer {
             guard let media = a["media"] as? String else { return (text("media is needed"), true) }
             var argv = ["words", (media as NSString).expandingTildeInPath]
             if let from = (a["from"] as? NSNumber)?.doubleValue, let to = (a["to"] as? NSNumber)?.doubleValue { argv += [String(from), String(to)] }
+            let r = await simbia(argv)
+            return (text(r.output), r.status != 0)
+
+        case "captions_from_voice":
+            guard let url = projectURL() else { return noProject }
+            var argv = ["captions", url.path]
+            for id in a["clips"] as? [String] ?? [] { argv += ["--clip", id] }
+            if let style = a["style"] as? String { argv += ["--style", style] }
+            if let locale = a["locale"] as? String { argv += ["--locale", locale] }
+            let script = FileManager.default.temporaryDirectory.appending(path: "simbia-script-\(UUID().uuidString.prefix(8)).txt")
+            defer { try? FileManager.default.removeItem(at: script) }
+            if let words = a["script"] as? String {
+                do { try words.write(to: script, atomically: true, encoding: .utf8) } catch { return (text(error.localizedDescription), true) }
+                argv += ["--script", script.path]
+            }
             let r = await simbia(argv)
             return (text(r.output), r.status != 0)
 

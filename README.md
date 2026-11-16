@@ -21,7 +21,8 @@ with `simbia workspace init <folder> --name … --brand …`; switch between the
 Claude works on the same files the app edits (the app picks up every change live). In a workspace folder Claude
 Code finds `.mcp.json` and gets the Simbia tools from `simbia mcp`: `workspace_info`, `list_projects`,
 `read_project`, `save_project` (revision, author and journal handled), `create_project`, `check_project`,
-`fix_project`, `frames` (pictures Claude can look at), `export_project`, `journal`, `suggest_footage`, `words`.
+`fix_project`, `frames` (pictures Claude can look at), `export_project`, `journal`, `suggest_footage`, `words`,
+`captions_from_voice` (captions from the voice clips, or the exact script timed by the voice; also `simbia captions`).
 For Claude Desktop add the same server to its config: `{"mcpServers": {"simbia": {"command":
 "/Applications/Simbia Captions.app/Contents/MacOS/simbia", "args": ["mcp"]}}}`.
 
