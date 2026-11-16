@@ -231,6 +231,11 @@ public struct ProjectSummary: Codable, Sendable {
     public var duration: Double
     public var shots: Int
     public var openTasks: [String]
+
+    /// One line for a list: file, status, revision and who saved, length, shots, how many tasks are open.
+    public var line: String {
+        "\(file)\t\(status)\trev \(revision) \(savedBy)\t\(String(format: "%.1f", duration)) s\t\(shots) shots\t\(openTasks.count) open"
+    }
 }
 
 extension Workspace {

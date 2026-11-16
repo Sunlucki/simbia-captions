@@ -456,9 +456,7 @@ case "workspace":                                 // workspace init <folder> [--
 case "projects":                                  // the workspace's projects: status, revision, who saved, length, open tasks
     let at = args.count >= 2 ? URL(fileURLWithPath: (args[1] as NSString).expandingTildeInPath) : URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
     guard let w = Workspace.find(near: at) else { fail("no \(Workspace.fileName) in \(at.path) or above") }
-    for p in w.summaries() {
-        print("\(p.file)\t\(p.status)\trev \(p.revision) \(p.savedBy)\t\(String(format: "%.1f", p.duration)) s\t\(p.shots) shots\t\(p.openTasks.count) open")
-    }
+    for p in w.summaries() { print(p.line) }
 
 case "mcp":                                       // the MCP server on stdin/stdout, for Claude (see MCP.swift)
     await MCPServer.run()

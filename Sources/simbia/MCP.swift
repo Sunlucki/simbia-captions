@@ -59,9 +59,9 @@ enum MCPServer {
         ["name": "create_workspace", "description": "A new workspace in a folder: Projects/, Library/{Footage,Music,Reviews,Motion}/, Exports/, simbia-workspace.json, CLAUDE.md, .mcp.json.",
          "inputSchema": schema(["folder": ["type": "string"], "name": ["type": "string"], "brand": ["type": "string", "description": "the brand's name, spelt as captions must spell it"],
                                 "author": ["type": "string", "description": "who edits in the app"]], required: ["folder", "name"])],
-        ["name": "list_projects", "description": "Every project of the workspace: file, status (new/review/done), revision, who saved last (app = the person), length, shots, open tasks.",
+        ["name": "list_projects", "description": "Every project of the workspace, one line each: file, status (new/review/done), revision and who saved last (app = the person), length, shots, how many tasks are open (read_project shows them).",
          "inputSchema": schema(["workspace": workspaceArg])],
-        ["name": "read_project", "description": "A project's whole .simbia JSON.",
+        ["name": "read_project", "description": "A project's whole .simbia JSON, compact (no indentation).",
          "inputSchema": schema(["project": projectArg, "workspace": workspaceArg], required: ["project"])],
         ["name": "save_project", "description": "Saves a project's whole JSON (as read_project gave it, edited). Refused when the file changed since it was read (its revision moved on). Bumps the revision, sets savedBy to claude and writes the journal line from `changes`.",
          "inputSchema": schema(["project": projectArg, "json": ["type": "string"], "changes": ["type": "array", "items": ["type": "string"], "description": "what changed, in plain words"],
@@ -121,16 +121,17 @@ enum MCPServer {
 
         case "list_projects":
             guard let w = needWorkspace() else { return noWorkspace }
-            let list = w.summaries().map { s -> [String: Any] in
-                ["file": s.file, "path": s.path, "number": s.number as Any, "status": s.status, "revision": s.revision, "savedBy": s.savedBy,
-                 "duration": (s.duration * 100).rounded() / 100, "shots": s.shots, "openTasks": s.openTasks]
-            }
-            return (text(json(list)), false)
+            // one line each: a few hundred projects stay a few thousand tokens (the tasks themselves are in read_project)
+            let lines = w.summaries().map(\.line)
+            return (text("\(lines.count) projects in \(w.projects.path)\n" + lines.joined(separator: "\n")), false)
 
         case "read_project":
             guard let url = projectURL() else { return noProject }
-            guard let s = try? String(contentsOf: url, encoding: .utf8) else { return (text("cannot read \(url.path)"), true) }
-            return (text(s), false)
+            // without the file's indentation: about a third smaller, so most projects fit one tool answer
+            guard let data = try? Data(contentsOf: url), let object = try? JSONSerialization.jsonObject(with: data),
+                  let compact = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes])
+            else { return (text("cannot read \(url.path)"), true) }
+            return (text(String(decoding: compact, as: UTF8.self)), false)
 
         case "save_project":
             guard let url = projectURL() else { return noProject }
