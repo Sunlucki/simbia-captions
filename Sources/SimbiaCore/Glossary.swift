@@ -16,13 +16,22 @@ public struct Glossary: Equatable, Sendable {
             .appending(path: "Simbia Captions/Glossary.txt")
     }
 
-    public static func load() -> Glossary {
+    /// The workspace's dictionary (of `url`'s workspace, else the open one); outside any, the machine's file.
+    public static func load(near url: URL? = nil) -> Glossary {
+        if let w = url.flatMap(Workspace.find(near:)) ?? Workspace.active { return Glossary(words: w.glossaryWords) }
         guard let text = try? String(contentsOf: file, encoding: .utf8) else { return Glossary(words: defaults) }
         return Glossary(words: text.split(whereSeparator: \.isNewline)
             .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
     }
 
+    /// Into the open workspace (its brand's name stays first and is not repeated), else the machine's file.
     public func save() throws {
+        if var w = Workspace.active {
+            let brand = w.settings.brand.name.lowercased()
+            w.settings.glossary = words.filter { $0.lowercased() != brand }
+            try w.save(); Workspace.active = w
+            return
+        }
         try FileManager.default.createDirectory(at: Self.file.deletingLastPathComponent(), withIntermediateDirectories: true)
         try (words.joined(separator: "\n") + "\n").write(to: Self.file, atomically: true, encoding: .utf8)
     }

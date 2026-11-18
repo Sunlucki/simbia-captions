@@ -31,7 +31,7 @@ struct WelcomeView: View {
             .padding(.horizontal, 16).padding(.top, 34).padding(.bottom, 16)
         }
         // the batches as they are now: on coming back here, and when the project browser closes (statuses change there)
-        .task(id: job.browserOpen) { if !job.browserOpen { await loadRecent() } }
+        .task(id: "\(job.browserOpen) \(job.workspace?.root.path ?? "")") { if !job.browserOpen { await loadRecent() } }
         .onDrop(of: [UTType.fileURL], isTargeted: $targeted) { providers in
             guard !job.busy, let item = providers.first else { return false }
             item.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { value, _ in
@@ -46,7 +46,7 @@ struct WelcomeView: View {
 
     /// The folder of the last project, by batch, the one changed last on top (the «Другие» without a number left out).
     private func loadRecent() async {
-        guard let folder = job.recentProjects.first?.deletingLastPathComponent() else { batches = []; return }
+        guard let folder = job.workspace?.projects ?? job.recentProjects.first?.deletingLastPathComponent() else { batches = []; return }
         let cards = await Task.detached(priority: .userInitiated) { ProjectCard.scan(folder) }.value
         let latest = { (b: ProjectBatch) in b.cards.map(\.modified).max() ?? .distantPast }
         batches = ProjectCard.batches(cards.filter { $0.number != nil }).sorted { latest($0) > latest($1) }
@@ -55,10 +55,9 @@ struct WelcomeView: View {
     private var recent: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text(job.t("ПОСЛЕДНИЕ ПРОЕКТЫ", "RECENT PROJECTS", "PROJETS RÉCENTS"))
-                    .font(.system(size: 13, weight: .semibold)).tracking(1.2).foregroundStyle(Theme.muted)
+                WorkspaceMenu(job: job)
                 Spacer()
-                Button { job.recentProjects.isEmpty ? job.projectPicker() : job.openBrowser() } label: {
+                Button { job.workspace == nil && job.recentProjects.isEmpty ? job.projectPicker() : job.openBrowser() } label: {
                     Label(job.t("ВСЕ ПРОЕКТЫ", "ALL PROJECTS", "TOUS LES PROJETS"), systemImage: "square.grid.2x2")
                         .font(.system(size: 12, weight: .semibold)).tracking(1)
                         .padding(.horizontal, 12).frame(height: 30)
@@ -71,7 +70,7 @@ struct WelcomeView: View {
             .padding(.horizontal, 18).frame(height: 58)
 
             if batches.isEmpty {
-                Text(job.recentProjects.isEmpty ? job.t("Пока нет проектов", "No projects yet", "Aucun projet pour l’instant") : "")
+                Text(job.workspace != nil || job.recentProjects.isEmpty ? job.t("Пока нет проектов", "No projects yet", "Aucun projet pour l’instant") : "")
                     .font(.system(size: 13)).foregroundStyle(Theme.muted)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {

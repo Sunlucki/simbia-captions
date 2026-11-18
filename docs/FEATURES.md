@@ -222,6 +222,7 @@ The **Checks** button (and **Export**, which runs them first) lists, with **Fix*
 - **Live two-way sync**: your edits are saved 0.3 s after you stop; a change made on disk (by Claude) loads in place as one undo step — ⌘Z returns to your version. The app never writes over a file changed elsewhere since it last read it.
 - Every save raises `revision` and records who saved (`app` / `claude`); the shared **edit journal** (`_journal.jsonl`) says in plain words what each of you changed.
 - A transcribed video without a project becomes one in Application Support and continues next time.
+- **MCP server** (`simbia mcp`, found by Claude Code through the workspace's `.mcp.json`): workspace_info, list/read/save/create_project, check/fix_project, frames, export_project, journal, suggest_footage, words, captions_from_voice. Its built-in instructions give Claude the order of work.
 
 ## Command line: `bin/simbia`
 
@@ -242,6 +243,7 @@ The engine without the window, for Claude and scripts. Every command that saves 
 | `export <project> <out.mp4>` | the finished video |
 | `audio <project> <out.wav>` | the mix before loudness |
 | `restyle <project> <sN>` | caption style for the whole video |
+| `captions <project> [--clip id] [--style sN] [--script file] [--locale]` | captions from the voice clips, saved and journalled; `--script`: exactly those words, timed by the voice (missing words listed) |
 | `voice <project>` | loudness of every voice clip before and after the voice chain |
 | `colourmatch <project> <shot id> <ref id> [--apply]` | grade a shot like the reference |
 | `play`, `playtap`, `bench`, `shadowtest`, `blurtest` | preview and calibration diagnostics |

@@ -11,6 +11,21 @@ for scripts and AI assistants. Interface in English, Russian and French.
   `{"name": "Acme", "key": "acme", "houseMusic": "House bed.wav"}` (the dictionary's first word, the product's name in
   the footage index's tags, the music level a new bed is matched to). Brand pictures go in `Assets/Brand/`, which git ignores.
 
+## Workspaces and Claude
+
+A workspace is one brand's (or one person's) whole job in one folder: `simbia-workspace.json` (name, brand,
+dictionary, who edits, where everything is), `Projects/`, `Library/{Footage,Music,Reviews,Motion}/`, `Exports/`,
+plus `CLAUDE.md` and `.mcp.json` for Claude. Make one from the start screen (workspace menu → New Workspace…) or
+with `simbia workspace init <folder> --name … --brand …`; switch between them on the start screen.
+
+Claude works on the same files the app edits (the app picks up every change live). In a workspace folder Claude
+Code finds `.mcp.json` and gets the Simbia tools from `simbia mcp`: `workspace_info`, `list_projects`,
+`read_project`, `save_project` (revision, author and journal handled), `create_project`, `check_project`,
+`fix_project`, `frames` (pictures Claude can look at), `export_project`, `journal`, `suggest_footage`, `words`,
+`captions_from_voice` (captions from the voice clips, or the exact script timed by the voice; also `simbia captions`).
+For Claude Desktop add the same server to its config: `{"mcpServers": {"simbia": {"command":
+"/Applications/Simbia Captions.app/Contents/MacOS/simbia", "args": ["mcp"]}}}`.
+
 ## Contributing
 
 Pull requests are welcome. Keep them small and focused, build with `swift build` before you open one, and describe

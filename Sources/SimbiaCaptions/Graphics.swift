@@ -10,7 +10,7 @@ extension Job {
         let picked = UserDefaults.standard.string(forKey: "reviewsFolder").map { URL(fileURLWithPath: $0, isDirectory: true) }
         let besideFootage = UserDefaults.standard.string(forKey: "footageIndex")
             .map { URL(fileURLWithPath: $0, isDirectory: true).deletingLastPathComponent().appending(path: "TRUSTPILOT") }
-        let found = [picked, ReviewLibrary.find(near: projectURL), besideFootage].compactMap { $0 }
+        let found = [workspace?.reviews, picked, ReviewLibrary.find(near: projectURL), besideFootage].compactMap { $0 }
             .first { FileManager.default.fileExists(atPath: $0.appending(path: ReviewLibrary.file).path) }
         guard let found else { reviews = nil; reviewsMissing = true; return }
         do {

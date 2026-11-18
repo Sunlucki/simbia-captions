@@ -85,8 +85,10 @@ public struct FootageIndex: Sendable {
     let usage: [Use]
     public private(set) var hidden: [Hidden] = []
 
-    /// `_ASSETS/_index` in the project's folder or any folder above it — where the footage library sits.
+    /// The workspace's footage index, else `_ASSETS/_index` in the project's folder or any folder above it.
     public static func find(near projectURL: URL?) -> URL? {
+        if let w = Workspace.find(near: projectURL) ?? Workspace.active,
+           FileManager.default.fileExists(atPath: w.footageIndex.appending(path: "clips").path) { return w.footageIndex }
         var folder = projectURL?.deletingLastPathComponent()
         while let dir = folder, dir.path != "/" {
             for candidate in [dir.appending(path: "_ASSETS/_index"), dir.appending(path: "_index")]

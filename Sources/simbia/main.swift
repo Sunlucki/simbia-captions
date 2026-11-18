@@ -14,6 +14,8 @@ import UniformTypeIdentifiers
 //   simbia overlay <project.simbia> <t,...> <prefix> [--style sN]
 //                                                       captions + titles only (transparent PNG + layout JSON)
 //   simbia restyle <project.simbia> <sN>                caption style for the whole video (regroups between 1- and 2-line)
+//   simbia captions <project.simbia> [--clip id]... [--style sN] [--script file] [--locale en-US]
+//                                                       captions from the voice clips, saved (--script: exactly those words)
 //   simbia fix <project.simbia> [kind ...]              fixes what check lists (all kinds, or those named) and saves
 //   simbia pauses <project.simbia> [seconds] [--apply]  the pauses between words; --apply takes them out and saves
 //   simbia suggest <project.simbia> <shot #>            footage from the library's index for what is said over a shot
@@ -22,6 +24,9 @@ import UniformTypeIdentifiers
 //   simbia covers <project.simbia> <shot #> [--apply]   burned-in text found on a shot by Vision; --apply covers it and saves
 //   simbia words <media> [from to] [--locale en-US] [--hint word]... [--json out]
 //                                                       what the Mac hears, word by word: {path, words: [{w, t0, t1}]}
+//   simbia workspace init <folder> […] | info [path]   a new workspace (folders, settings, CLAUDE.md, .mcp.json) / its settings
+//   simbia projects [workspace]                         the workspace's projects, one line each
+//   simbia mcp                                          the MCP server for Claude, on stdin/stdout
 
 let usage = """
 usage:
@@ -29,6 +34,7 @@ usage:
   simbia frame <project.simbia> <t,t,...> <out-prefix> [--no-overlay]
   simbia export <project.simbia> <out.mp4>
   simbia overlay <project.simbia> <t,t,...> <out-prefix> [--style sN]
+  simbia captions <project.simbia> [--clip id]... [--style sN] [--script file] [--locale en-US]
   simbia fix <project.simbia> [overlap|repeated|brand|voice|nearCut|gap|fast|small|shortTitle|hiddenCut ...]
   simbia pauses <project.simbia> [seconds] [--apply]
   simbia suggest <project.simbia> <shot #>
@@ -36,6 +42,10 @@ usage:
   simbia tempo <audio | project.simbia>
   simbia covers <project.simbia> <shot #> [--apply]
   simbia words <media> [from to] [--locale en-US] [--hint word]... [--json out]
+  simbia workspace init <folder> [--name N] [--brand B] [--key k] [--author A]
+  simbia workspace info [path]
+  simbia projects [workspace]
+  simbia mcp
 """
 
 func fail(_ message: String) -> Never {
@@ -45,6 +55,7 @@ func fail(_ message: String) -> Never {
 
 func load(_ path: String) -> (Project, URL) {
     let url = URL(fileURLWithPath: path)
+    Workspace.activate(near: url)
     do { return (try Project.load(from: url), url) } catch { fail(error.localizedDescription) }
 }
 
@@ -381,6 +392,52 @@ case "restyle":                                    // a caption style for the wh
     do { try project.save(to: url) } catch { fail(error.localizedDescription) }
     print("\(project.captions.style): \(project.captions.chunks.count) captions; saved revision \(project.revision)")
 
+case "captions":                                   // captions from the voice clips (all, or --clip id …), as the app's «Создать
+    guard args.count >= 2 else { fail(usage) }                                               // субтитры»; --script: those exact words
+    var (project, url) = load(args[1])
+    func option(_ name: String) -> [String] { args.indices.filter { args[$0] == name && $0 + 1 < args.count }.map { args[$0 + 1] } }
+    let ids = option("--clip")
+    let voice = project.audio.filter { $0.role == .voice && (ids.isEmpty || ids.contains($0.id)) }.sorted { $0.start < $1.start }
+    guard !voice.isEmpty else { fail(ids.isEmpty ? "no voice clip in the project" : "no voice clip \(ids.joined(separator: ", "))") }
+    if let style = option("--style").first {
+        guard CaptionStyle(id: style) != nil else { fail("unknown caption style \(style)") }
+        project.captions.style = style
+    }
+    let glossary = Glossary.load(near: url)
+    let locale = option("--locale").first.map { Locale(identifier: $0) } ?? Locale(identifier: "en-US")
+    let work = FileManager.default.temporaryDirectory.appending(path: "simbia-captions-\(ProcessInfo.processInfo.processIdentifier)")
+    defer { try? FileManager.default.removeItem(at: work) }
+    var heard: [[ChunkWord]] = [], spans: [ClosedRange<Double>] = []
+    do {
+        for clip in voice {
+            heard.append(try await VoiceCaptions.heard(clip, projectURL: url, locale: locale, hints: glossary.words, work: work))
+            let length = clip.duration == nil ? try await SpeechAudio.length(of: Project.resolve(clip.src, relativeTo: url)) : nil
+            spans.append(VoiceCaptions.span(of: clip, length: length))
+        }
+    } catch { fail("captions: \(error.localizedDescription)") }
+    var paragraphs = heard.map { $0.map { w in var w = w; w.text = glossary.correction(for: w.text) ?? w.text; return w } }
+    var missing: [String] = []
+    if let path = option("--script").first {
+        guard let text = try? String(contentsOfFile: path, encoding: .utf8) else { fail("cannot read \(path)") }
+        let timed = VoiceCaptions.timed(script: text.split(whereSeparator: \.isWhitespace).map(String.init), by: heard.flatMap { $0 })
+        missing = timed.missing
+        // each word in the paragraph of the clip its middle is in
+        paragraphs = voice.map { _ in [] }
+        for w in timed.words { paragraphs[spans.lastIndex { $0.lowerBound <= (w.start + w.end) / 2 } ?? 0].append(w) }
+    }
+    let made = VoiceCaptions.chunks(paragraphs, style: project.captions.style)
+    guard !made.isEmpty else { fail("no speech heard in \(voice.count) voice clip(s)") }
+    project.captions.chunks = VoiceCaptions.placing(made, into: project.captions.chunks, replacing: ids.isEmpty ? nil : spans)
+    project.revision += 1; project.savedBy = "claude"
+    do { try project.save(to: url) } catch { fail(error.localizedDescription) }
+    let words = paragraphs.reduce(0) { $0 + $1.count }
+    Journal.append(JournalEntry(project: url.lastPathComponent, revision: project.revision, by: "claude",
+                                changes: ["субтитры из голоса: \(made.count) (\(words) слов, стиль \(project.captions.style)" + (option("--script").isEmpty ? ")" : ", по скрипту)")]),
+                   inFolder: url.deletingLastPathComponent())
+    print("\(made.count) captions, \(words) words from \(voice.count) voice clip(s), style \(project.captions.style); saved revision \(project.revision)")
+    if !missing.isEmpty { print("not heard in the voice (\(missing.count)): " + missing.joined(separator: " ")) }
+    if !ids.isEmpty, !option("--style").isEmpty { print("the other captions keep their grouping: simbia restyle regroups them for \(project.captions.style)") }
+
 case "pauses":                                     // silences between words; --apply takes them out
     guard args.count >= 2 else { fail(usage) }
     var (project, url) = load(args[1])
@@ -423,6 +480,35 @@ case "suggest":                                    // the library's best moments
     for s in index.suggest(for: said, length: shot.duration, taken: taken) {
         print(String(format: "  %@ @%.1f–%.1f  %@ · %@%@\n    %@", s.clip, s.from, s.to, s.tag, s.who, s.usedIn.isEmpty ? "" : " · used in \(s.usedIn.joined(separator: ", "))", s.note))
     }
+
+case "workspace":                                 // workspace init <folder> [--name …] [--brand …] [--key …] [--author …] | workspace info [path]
+    func option(_ name: String) -> String? { args.firstIndex(of: name).flatMap { args.indices.contains($0 + 1) ? args[$0 + 1] : nil } }
+    switch args.dropFirst().first {
+    case "init":
+        guard args.count >= 3 else { fail("simbia workspace init <folder> [--name N] [--brand B] [--key k] [--author A]") }
+        let root = URL(fileURLWithPath: (args[2] as NSString).expandingTildeInPath, isDirectory: true)
+        let brandName = option("--brand") ?? ""
+        let brand = Brand(name: brandName, key: option("--key") ?? (brandName.isEmpty ? "product" : brandName.lowercased().filter(\.isLetter)))
+        do {
+            let w = try Workspace.create(at: root, name: option("--name") ?? root.lastPathComponent, brand: brand,
+                                         author: option("--author"), simbia: Bundle.main.executableURL?.resolvingSymlinksInPath())
+            print("workspace «\(w.settings.name)» in \(w.root.path): \(Workspace.fileName), CLAUDE.md, .mcp.json, Projects/, Library/, Exports/")
+        } catch { fail(error.localizedDescription) }
+    case "info", nil:
+        let at = args.count >= 3 ? URL(fileURLWithPath: (args[2] as NSString).expandingTildeInPath) : URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        guard let w = Workspace.find(near: at) else { fail("no \(Workspace.fileName) in \(at.path) or above") }
+        print(MCPServer.json(MCPServer.info(w)))
+    default:
+        fail("simbia workspace init <folder> … | simbia workspace info [path]")
+    }
+
+case "projects":                                  // the workspace's projects: status, revision, who saved, length, open tasks
+    let at = args.count >= 2 ? URL(fileURLWithPath: (args[1] as NSString).expandingTildeInPath) : URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    guard let w = Workspace.find(near: at) else { fail("no \(Workspace.fileName) in \(at.path) or above") }
+    for p in w.summaries() { print(p.line) }
+
+case "mcp":                                       // the MCP server on stdin/stdout, for Claude (see MCP.swift)
+    await MCPServer.run()
 
 default:
     fail(usage)

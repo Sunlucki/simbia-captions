@@ -6,6 +6,8 @@ rm -rf "$APP_DIR"
 mkdir -p "$APP_DIR/Contents/MacOS"
 mkdir -p "$APP_DIR/Contents/Resources"
 cp .build/release/SimbiaCaptions "$APP_DIR/Contents/MacOS/SimbiaCaptions"
+# the engine inside the app too: a new workspace's .mcp.json points Claude at it
+cp .build/release/simbia "$APP_DIR/Contents/MacOS/simbia"
 cp Assets/AppIcon.png "$APP_DIR/Contents/Resources/AppIcon.png"
 cp Assets/AppIcon.icns "$APP_DIR/Contents/Resources/AppIcon.icns"
 # the .simbia files' own icon in Finder (Assets/DocIcon.iconset -> iconutil)

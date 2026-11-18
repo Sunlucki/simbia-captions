@@ -168,7 +168,11 @@ struct ProjectBrowser: View {
 
     /// The open project, or on the start screen the last one opened.
     private var current: URL? { job.projectURL ?? job.recentProjects.first }
-    private var folder: URL? { current?.deletingLastPathComponent() }
+    /// The open project's workspace or folder; on the start screen the workspace in use, else the last project's folder.
+    private var folder: URL? {
+        if let p = job.projectURL { return Workspace.find(near: p)?.projects ?? p.deletingLastPathComponent() }
+        return job.workspace?.projects ?? current?.deletingLastPathComponent()
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -425,7 +429,7 @@ private struct ProjectDetail: View {
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 6) {
                             Circle().fill(e.by == "app" ? Color(red: 0.35, green: 0.65, blue: 1) : Color(red: 1, green: 0.6, blue: 0.3)).frame(width: 7, height: 7)
-                            Text((e.by == "app" ? job.t("Богдан", "Bogdan") : "Claude") + " · " + e.at.formatted(date: .abbreviated, time: .shortened))
+                            Text((e.by == "app" ? job.authorName : "Claude") + " · " + e.at.formatted(date: .abbreviated, time: .shortened))
                                 .font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.muted)
                         }
                         ForEach(Array(e.changes.enumerated()), id: \.offset) { _, line in
